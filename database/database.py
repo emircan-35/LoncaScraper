@@ -1,7 +1,8 @@
 import logging
 
+from pymongo import UpdateOne
 from motor.motor_asyncio import AsyncIOMotorClient
-from beanie import init_beanie
+from beanie import init_beanie, Document, PydanticObjectId
 from pydantic import BaseModel
 from typing import List, Dict, Any, Optional
 
@@ -47,6 +48,28 @@ class MongoDB:
         except Exception as e:
             logger.error(f"Error inserting multiple products: {e}")
 
+    async def upsert_products(self, products: List[Product]):
+        """
+        Insert or update products based on stock_code.
+
+        Args:
+            products (List[Product]): List of Product instances to be inserted/updated.
+        """
+        operations = []
+        for product in products:
+            product_dict = product.dict(by_alias=True, exclude_unset=True)  
+
+            operations.append(
+                UpdateOne(
+                    {"stock_code": product.stock_code},  
+                    {"$set": product_dict},  
+                    upsert=True 
+                )
+            )
+    
+        result = await Product.get_motor_collection().bulk_write(operations)
+        return result
+    
     async def find_one(self, query: Dict[str, Any]) -> Optional[Product]:
         """ Find a single document based on a query """
         try:
