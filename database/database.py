@@ -1,11 +1,11 @@
 import logging
 
 from pymongo import UpdateOne
+from pymongo.errors import BulkWriteError
 from motor.motor_asyncio import AsyncIOMotorClient
-from beanie import init_beanie, Document, PydanticObjectId
+from beanie import init_beanie
 from pydantic import BaseModel
-from typing import List, Dict, Any, Optional
-
+from typing import List
 from db_model.product.product import Product
 
 logger = logging.getLogger(__name__)
@@ -24,56 +24,35 @@ class MongoDB:
         self.client = AsyncIOMotorClient(self.host, self.port)
         self.db = self.client[self.db_name]
         
-        # Initialize Beanie with the Product model
         await init_beanie(self.db, document_models=[Product])
 
-    async def insert_one(self, product: Product) -> str:
-        """ Insert a single product document into the Products collection """
-        try:
-            await product.insert()
-            return str(product.id)  # Return the product's ID as a string
-        except Exception as e:
-            logger.error(f"Error inserting product: {e}")
-            return ""
-
-    async def add_many(self, products: List[Product]) -> None:
-        """
-        Insert multiple Product documents into the database.
-
-        Args:
-            products (List[Product]): List of Product instances to be inserted.
-        """
-        try:
-            await Product.insert_many(products)
-        except Exception as e:
-            logger.error(f"Error inserting multiple products: {e}")
 
     async def upsert_products(self, products: List[Product]):
         """
         Insert or update products based on stock_code.
-
+        
         Args:
             products (List[Product]): List of Product instances to be inserted/updated.
+        
+        Returns:
+            int: The number of upsert operations performed.
         """
         operations = []
         for product in products:
-            product_dict = product.dict(by_alias=True, exclude_unset=True)  
+            product_dict = product.model_dump(by_alias=True, exclude_unset=True)  
 
             operations.append(
                 UpdateOne(
-                    {"stock_code": product.stock_code},  
+                    {"stock_code": product.stock_code}, 
                     {"$set": product_dict},  
-                    upsert=True 
+                    upsert=True  
                 )
             )
-    
-        result = await Product.get_motor_collection().bulk_write(operations)
-        return result
-    
-    async def find_one(self, query: Dict[str, Any]) -> Optional[Product]:
-        """ Find a single document based on a query """
+        
         try:
-            return await Product.find_one(query)
-        except Exception as e:
-            logger.error(f"Error finding product: {e}")
-            return None
+            result = await Product.get_motor_collection().bulk_write(operations)
+            return (result.upserted_count, result.modified_count)  
+
+        except BulkWriteError as e:
+            print(f"Error occurred during bulk write operation: {e.details}")
+            return 0

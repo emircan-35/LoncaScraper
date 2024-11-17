@@ -6,6 +6,8 @@ from datetime import datetime
 from pydantic import Field
 from typing import Optional
 
+from pydantic_core import ValidationError
+
 class Color(str, Enum):
     BEJ = "Bej"
     TURUNCU = "Turuncu"
@@ -23,8 +25,7 @@ class Product(Document):
     images: List[str] = Field(..., alias="images")
     is_discounted: bool = Field(..., alias="isDiscounted")
     name: str = Field(..., alias="name")
-    price: float = Field(..., alias="price")
-    price_unit: str = Field(..., alias="priceUnit")
+    price_unit: Optional[str] = Field(..., alias="priceUnit")
     product_type: str = Field(..., alias="productType")
     quantity: int = Field(..., alias="quantity")
     sample_size: Optional[str] = Field(None, alias="sampleSize")
@@ -34,24 +35,10 @@ class Product(Document):
     model_measurements: Optional[str] = Field(None, alias="modelMeasurements")
     product_measurements: Optional[str] = Field(None, alias="productMeasurements")
     createdAt: datetime = Field(..., alias="createdAt")
-    updatedAt: Optional[datetime] = Field(..., alias="updatedAt")
+    updatedAt: datetime = Field(..., alias="updatedAt")
 
     class Settings:
-        collection = "products"  
-
-    @staticmethod
-    def safe_find(element, tag, transform_func=str, default=None):
-        """
-        Helper function to find an element and apply a transformation function.
-        Returns a default value if the element is not found or can't be transformed.
-        """
-        found_element = element.find(tag)
-        if found_element is not None and found_element.text:
-            try:
-                return transform_func(found_element.text)
-            except ValueError:
-                return default  # Return default value in case of a transformation error
-        return default
+        collection = "products"
 
     @staticmethod
     async def parse_xml_to_products(xml_path: str) -> List["Product"]:
@@ -65,26 +52,31 @@ class Product(Document):
 
             product_details = {detail.get("Name"): detail.get("Value") for detail in product_element.findall("ProductDetails/ProductDetail")}
 
-            product = Product(
-                stock_code=product_element.get("ProductId", ""),
-                name=product_element.get("Name", ""),
-                color=[Color(c) for c in product_details.get("Color", "").split(",")] if "Color" in product_details else [],
-                discounted_price=Product.safe_find(product_element, "ProductDetails/ProductDetail[@Name='DiscountedPrice']", transform_func=lambda x: float(x.replace(",", ".")), default=0.0),
-                images=images,
-                is_discounted=Product.safe_find(product_element, "ProductDetails/ProductDetail[@Name='DiscountedPrice']", transform_func=lambda x: float(x.replace(",", ".")) > 0, default=False),
-                price=Product.safe_find(product_element, "ProductDetails/ProductDetail[@Name='Price']", transform_func=lambda x: float(x.replace(",", ".")), default=0.0),
-                price_unit="",  
-                product_type=product_details.get("ProductType", ""),
-                quantity=int(product_details.get("Quantity", 0)),
-                sample_size=product_details.get("SampleSize", ""),  
-                series=product_details.get("Series", ""),
-                status=product_details.get("Status", None),  
-                fabric=product_details.get("Fabric", None),  
-                model_measurements=product_details.get("ModelMeasurements", None), 
-                product_measurements=product_details.get("ProductMeasurements", None),  
-                createdAt=datetime.utcnow(),  
-                updatedAt=None  
-            )
-            products.append(product)
+            try:
+                product = Product(
+                    stock_code = product_element.get("ProductId", None),
+                    name = product_element.get("Name", None),
+                    color = [Color(c) for c in product_details.get("Color", "").split(",")] if "Color" in product_details else [],
+                    images = images,
+                    is_discounted = product_details.get("DiscountedPrice", "0") != "0",
+                    discounted_price = float(product_details.get("DiscountedPrice", "0").replace(",", ".")) if product_details.get("DiscountedPrice") else None,
+                    price = float(product_details.get("Price", "0").replace(",", ".")) if product_details.get("Price") else None,
+                    price_unit = product_details.get("PriceUnit", None),
+                    product_type = product_details.get("ProductType", None),
+                    quantity = int(product_details.get("Quantity", None)),
+                    sample_size = product_details.get("SampleSize", None),
+                    series = product_details.get("Series", None),
+                    status = product_details.get("Status", None),
+                    fabric = product_details.get("Fabric", None),
+                    model_measurements = product_details.get("ModelMeasurements", None),
+                    product_measurements = product_details.get("ProductMeasurements", None),
+                    createdAt = datetime.utcnow(),
+                    updatedAt = datetime.utcnow()
+                )
+                products.append(product)
+            except ValidationError as err:
+                print("Validation error occured for one or more following fields.")
+                print(etree.tostring(product_element, pretty_print=True).decode())
+                print("Continue with the next element...")
 
         return products
