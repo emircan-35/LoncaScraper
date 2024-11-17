@@ -11,7 +11,7 @@ from db_model.product.product import Product
 logger = logging.getLogger(__name__)
 
 class MongoDB:
-    def __init__(self, db_name: str, host: str = "localhost", port: int = 27017):
+    def __init__(self, db_name: str, port: int, host: str = "localhost", ):
         """ Initializes the connection to MongoDB """
         self.db_name = db_name
         self.host = host

@@ -1,10 +1,17 @@
-import asyncio
+import asyncio, os
+
 from database.database import MongoDB 
 from db_model.product.product import Product
+from dotenv import load_dotenv
     
 async def main():
-    # Create the MongoDB connection
-    db = MongoDB(db_name="Lonca")
+    load_dotenv() 
+
+    DB_NAME = os.getenv("DB_NAME")
+    DB_PORT = int(os.getenv("DB_PORT"))
+
+    db = MongoDB(DB_NAME,DB_PORT)
+
     await db.connect()
 
     products = await Product.parse_xml_to_products('lonca-sample.xml')
