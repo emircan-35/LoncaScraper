@@ -25,6 +25,7 @@ class Product(Document):
     images: List[str] = Field(..., alias="images")
     is_discounted: bool = Field(..., alias="isDiscounted")
     name: str = Field(..., alias="name")
+    price: float = Field(..., alias="price")
     price_unit: Optional[str] = Field(..., alias="priceUnit")
     product_type: str = Field(..., alias="productType")
     quantity: int = Field(..., alias="quantity")
@@ -73,6 +74,8 @@ class Product(Document):
                     createdAt = datetime.utcnow(),
                     updatedAt = datetime.utcnow()
                 )
+                product.format_instance()
+
                 products.append(product)
             except ValidationError as err:
                 print("Validation error occured for one or more following fields.")
@@ -80,3 +83,42 @@ class Product(Document):
                 print("Continue with the next element...")
 
         return products
+    
+    def format_instance(self) -> "Product":
+        if self.name:
+            self.name = self._format_name(self.name)
+        if self.stock_code:
+            self.stock_code = self._format_product_id(self.stock_code)
+        if self.discounted_price:
+            self.discounted_price = self._format_discounted_price(self.discounted_price)
+        if self.price:
+            self.price = self._format_discounted_price(self.price)
+        if self.price_unit:
+            self.price_unit = self._format_name(self.price_unit)
+        if self.product_type:
+            self.product_type = self._format_name(self.product_type)
+        if self.series:
+            self.series = self._format_name(self.series)
+        if self.status:
+            self.status = self._format_name(self.status)
+        if self.fabric:
+            self.fabric = self._format_name(self.fabric)
+        if self.model_measurements:
+            self.model_measurements = self._format_name(self.model_measurements)
+        if self.product_measurements:
+            self.product_measurements = self._format_name(self.product_measurements)
+        
+        return self
+
+
+    def _format_name(self, value: str) -> str:
+        return value.strip().capitalize() if value else ""
+
+    def _format_product_id(self, value: str) -> str:
+        return value.strip().upper() if value else ""
+
+    def _format_color(self, colors: List[Color]) -> List[str]:
+        return [color.capitalize() for color in colors]
+
+    def _format_discounted_price(self, value: Optional[float]) -> Optional[float]:
+        return round(value, 4) if value is not None else None
