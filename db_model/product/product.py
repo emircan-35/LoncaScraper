@@ -5,7 +5,6 @@ from lxml import etree
 from datetime import datetime
 from pydantic import Field
 from typing import Optional
-
 from pydantic_core import ValidationError
 
 class Color(str, Enum):
